@@ -20,6 +20,7 @@ export interface Project {browserContract?:import('../../server/browserContract'
 export interface Task {executionRevision?:number;consultedProblems?:string[]}
 export interface Project {inputDocument?:DocumentAttachment}
 export interface Task {inputDocument?:DocumentAttachment}
+export interface Task {research?:{ticker:string;date:string;question:string;maxCalls:number};researchSettingsHash?:string;researchStarted?:boolean;researchCalls?:number;researchReceipt?:{sha256:string}}
 export interface Store {version:1;boss:string;companies:Company[];tasks:Task[];projects?:Project[];paused:boolean;maxTasksPerDay:number;maxConcurrentTasks?:number;stopReason?:string}
 export const labels:Record<State|'idle',string>={queued:'等待接力',working:'工作中',approve:'待你驗收',blocked:'卡關',done:'完成',idle:'待命',cancelled:'已停止'};
 const names=['周敬文','林子崴','許郁庭','陳奕安','李若晴','蘇以寧','張予恩'];

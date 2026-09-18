@@ -23,4 +23,6 @@ protocol/
 *.local
 *.pem
 *.key
+__pycache__/
+*.pyc
 AGENTS.md

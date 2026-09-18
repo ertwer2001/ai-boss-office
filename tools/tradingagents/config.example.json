@@ -1,0 +1,7 @@
+{
+  "enabled": true,
+  "provider": "ollama",
+  "backendUrl": "http://127.0.0.1:11434/v1",
+  "deepModel": "REPLACE_WITH_YOUR_INSTALLED_MODEL",
+  "quickModel": "REPLACE_WITH_YOUR_INSTALLED_MODEL"
+}

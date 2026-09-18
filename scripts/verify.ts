@@ -33,6 +33,8 @@ try{
  assert.equal(codex.connected,false);assert.deepEqual(codex.models,[]);
  const company=await fetch(base+'/api/companies',{method:'POST',headers:{'Content-Type':'application/json','X-Boss-Office':'local'},body:JSON.stringify({name:'離線規畫公司',type:'studio'})});
  assert.equal(company.status,200,'未安裝 Codex 時仍應可建立公司設定');
+ const researchStatus=await fetch(base+'/api/tradingagents/status');assert.equal(researchStatus.status,200);assert.equal((await researchStatus.json()).ready,false);
+ const denied=await fetch(base+'/api/companies/not-present/trading-research',{method:'POST',headers:{'Content-Type':'application/json','X-Boss-Office':'local'},body:'{}'});assert.equal(denied.status,400,'沒有有效頁面不能啟動研究');
  console.log(JSON.stringify({http:true,noInference:true,codexOptional:true,port},null,2));
 }finally{
  if(child.exitCode===null)child.kill('SIGTERM');
