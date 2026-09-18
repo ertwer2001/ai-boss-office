@@ -1,0 +1,10 @@
+import fs from 'node:fs';import assert from 'node:assert/strict';
+const url='http://127.0.0.1:4317';
+const [health,state,html,catalog]=await Promise.all([fetch(url+'/api/health').then(r=>r.json()),fetch(url+'/api/state').then(r=>r.json()),fetch(url).then(r=>r.text()),fetch(url+'/api/role-profiles').then(r=>r.json())]);
+const before=JSON.parse(fs.readFileSync('docs/verification/production-before-agency-update.json','utf8').replace(/^\uFEFF/,''));
+assert.equal(health.version,'2.4.0');assert.equal(state.paused,true);assert(!state.tasks.some((t:any)=>t.state==='working'));assert.equal(catalog.profiles.length,6);
+// PowerShell JSON snapshot shortens trailing zeroes in ISO milliseconds; compare the same instants.
+function canonical(value:unknown):unknown{if(typeof value==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/.test(value))return new Date(value).toISOString();if(Array.isArray(value))return value.map(canonical);if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,canonical(v)]));return value}
+assert.deepEqual(canonical(state.tasks),canonical(before.tasks));assert.deepEqual(canonical(state.projects),canonical(before.projects));assert.deepEqual(canonical(state.companies.map(({dispatchStatus,...c}:any)=>c)),canonical(before.companies.map(({dispatchStatus,...c}:any)=>c)));
+const assets=[...html.matchAll(/(?:src|href)="(\/assets\/[^\"]+)"/g)].map(x=>x[1]);assert(assets.some(x=>x.endsWith('.js')));for(const a of assets){const r=await fetch(url+a);assert(r.ok,a);assert((await r.text()).length>100)}
+const result={at:new Date().toISOString(),health,companies:state.companies.length,tasks:state.tasks.length,projects:state.projects.length,allUserRecordsPreserved:true,paused:true,working:0,roles:catalog.profiles.map((p:any)=>p.id),catalogVersion:catalog.version,sourceCommit:catalog.commit,assets};fs.writeFileSync('docs/verification/production-agency-update.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));

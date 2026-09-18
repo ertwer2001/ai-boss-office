@@ -1,0 +1,10 @@
+import type {Company,Model} from '../domain/company';
+import {suggestions,type PlannedTask} from '../domain/recommendations';
+export function CompanySuggestions({company,onSelect}:{company:Company;onSelect:(id:string,title:string)=>void}){
+ return <div className="suggestions"><div className="label">快速範例 · 也可以自行輸入目標交給主管</div><div className="chips">{suggestions[company.type].map(s=><button key={s.id} type="button" className="chip" onClick={()=>onSelect(s.id,s.title)} title={`${s.role} · ${s.model} / ${s.effort}`}><strong>{s.label}</strong><span>{s.model.replace('gpt-','')} · {s.effort}{!s.auto?' · 需提供資料':''}</span></button>)}</div></div>
+}
+export function PlanEditor({plans,company,models,onChange}:{plans:PlannedTask[];company:Company;models:Model[];onChange:(p:PlannedTask[])=>void}){
+ function update(index:number,patch:Partial<PlannedTask>){onChange(plans.map((p,i)=>i===index?{...p,...patch}:p))}
+ return <>{plans.map((p,i)=><div className="plan-row" key={i}><label className="field">任務 {i+1}<input value={p.title} onChange={e=>update(i,{title:e.target.value})}/></label><label className="field">負責人<select aria-label={`任務 ${i+1} 負責人`} value={p.employeeId} onChange={e=>update(i,{employeeId:e.target.value})}>{company.employees.map(e=><option key={e.id} value={e.id}>{e.title} · {e.name}</option>)}</select></label><div className="model-fields"><label className="field">本次模型<select aria-label={`任務 ${i+1} 模型`} value={p.model} onChange={e=>{const m=models.find(m=>m.id===e.target.value)!;update(i,{model:m.id,effort:m.efforts.includes(p.effort)?p.effort:m.defaultEffort})}}>{models.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}</select></label><label className="field">推理強度<select aria-label={`任務 ${i+1} 強度`} value={p.effort} onChange={e=>update(i,{effort:e.target.value})}>{models.find(m=>m.id===p.model)?.efforts.map(e=><option key={e} value={e}>{e}</option>)}</select></label></div><p className="exp">{p.reason}；此設定只套用本次任務。</p></div>)}</>
+}
+export {ManagerPanel as AutoDispatchPanel,ManagerOrderDialog} from './ManagerPanel';

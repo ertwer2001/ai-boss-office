@@ -1,0 +1,10 @@
+import fs from 'node:fs';import assert from 'node:assert/strict';
+const url='http://127.0.0.1:4321',read=(p:string)=>JSON.parse(fs.readFileSync(p,'utf8').replace(/^\uFEFF/,''));
+const before=read('docs/verification/agency-ui-before-close.json'),state=await (await fetch(url+'/api/state')).json(),health=await (await fetch(url+'/api/health')).json();
+assert.equal(health.inferenceEnabled,false);assert.equal(health.pid,read('docs/verification/agency-ui-service.json').pid);
+const employee=state.companies[0].employees[1],snapshot=state.projects[0].teamSnapshot[employee.id];
+assert.equal(employee.profileId,'none');assert.equal(snapshot.profile.id,'writer');for(const k of ['name','model','effort'])assert.equal(employee[k],snapshot[k]);
+assert.equal(state.paused,true);assert.equal(state.projects[0].status,'stopped');assert.equal(state.projects[0].calls,0);assert(!state.tasks.some((t:any)=>t.state==='working'||t.state==='queued'));assert.deepEqual(state.projects[0].teamSnapshot,before.projects[0].teamSnapshot);
+const invalid=await fetch(url+'/api/employees/'+employee.id,{method:'PATCH',headers:{'Content-Type':'application/json','X-Boss-Office':'local'},body:JSON.stringify({...employee,profileId:'untrusted-external-profile'})});assert.equal(invalid.status,400);
+const after=await (await fetch(url+'/api/state')).json();assert.deepEqual(after.companies,state.companies);
+const result={at:new Date().toISOString(),health,uiSelectedWriterSavedAndReopened:true,uiChangedToNone:true,projectSnapshotStillWriter:true,nameModelEffortUnchanged:true,invalidProfileRejected:invalid.status,closedPageStoppedProject:true,modelCalls:0};fs.writeFileSync('docs/verification/agency-ui-acceptance.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));

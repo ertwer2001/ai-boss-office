@@ -1,0 +1,21 @@
+import fs from 'node:fs';import path from 'node:path';import {beforeEach,afterEach,it,expect} from 'vitest';
+import {makeCompany,type Store,type Task,type Project} from '../src/domain/company';
+import {browserContract,type BrowserEvidence} from './browserContract';import {createProject,runManager,projectWorks,advanceProjects,stopProject} from './projects';import {digest,saveFile} from './workspace';
+const models=[{id:'fixture',name:'fixture',efforts:['low'],defaultEffort:'low'}];
+const contract=browserContract.parse({entryStep:0,entryPath:'index.html',requirements:['計數'],scenarios:[{name:'累加',requirement:'計數',kind:'happy',steps:[{action:'click',selector:'#add',value:''},{action:'text',selector:'#n',value:'1'}]},{name:'重設',requirement:'計數',kind:'edge',steps:[{action:'click',selector:'#reset',value:''},{action:'text',selector:'#n',value:'0'}]}]});
+let root:string,s:Store,p:Project,work:Task,final:Task;
+beforeEach(async()=>{
+ fs.mkdirSync('docs/verification/browser-unit',{recursive:true});root=fs.mkdtempSync(path.resolve('docs/verification/browser-unit/case-'));
+ s={version:1,boss:'測試老闆',companies:[makeCompany('實作驗收室','studio',models)],tasks:[],paused:false,maxTasksPerDay:50};p=createProject(s,s.companies[0],models,'goal','製作計數 APP');
+ s.tasks[0].state='working';await runManager(s.tasks[0],s,models,root,root+'/out',()=>{},async()=>({decision:'proceed',title:'計數',reason:'實作',category:'none',question:'',assumptions:[],browserContract:contract,steps:[{title:'計數',employeeId:s.companies[0].employees[1].id,model:'fixture',effort:'low',acceptance:['計數']}]}));
+ work=projectWorks(s,p)[0];work.state='done';work.attempt=1;work.reviewedAttempt=1;const rel=`workspaces/${work.id}/draft/v1/index.html`;work.pendingFiles=[{path:rel,sha256:saveFile(root,rel,'<button>fixture</button>')}];advanceProjects(s);final=s.tasks.at(-1)!;final.state='working';
+});
+afterEach(()=>fs.rmSync(root,{recursive:true,force:true}));
+const evidence=(html:string):BrowserEvidence=>({at:new Date().toISOString(),status:'pass',htmlSha256:digest(html),contractSha256:digest(JSON.stringify(contract)),environment:'unit fixture',scenarios:contract.scenarios.map(x=>({name:x.name,passed:true,steps:x.steps.length})),errors:[]});
+const never=async()=>{throw new Error('Should not infer')};
+it('已訂定的驗收條件被修改，不啟動驗收或推論',async()=>{p.browserContract=structuredClone(contract);p.browserContract.requirements[0]='降級';await expect(runManager(final,s,models,root,root+'/out',()=>{},never,async()=>{throw new Error('Should not validate')})).rejects.toThrow();expect(work.files).toEqual([])});
+it('驗收期間停止，遲到 PASS 不發布也不再呼叫主管',async()=>{const calls=p.calls;await runManager(final,s,models,root,root+'/out',()=>{},never,async(_t,html)=>{stopProject(s,p);return evidence(html)});expect(p.status).toBe('stopped');expect(p.calls).toBe(calls);expect(p.browserEvidence).toBeUndefined();expect(work.files).toEqual([])});
+it('驗收期間草稿內容被竄改，拒绝舊 PASS',async()=>{await expect(runManager(final,s,models,root,root+'/out',()=>{},never,async(_t,html)=>{fs.writeFileSync(path.join(root,work.pendingFiles![0].path),'tampered');return evidence(html)})).rejects.toThrow('校驗');expect(p.status).not.toBe('completed');expect(work.files).toEqual([])});
+it('瀏覽器故障不要求模型猜測修正',async()=>{const calls=p.calls;await runManager(final,s,models,root,root+'/out',()=>{},never,async()=>{throw new Error('Edge unavailable')});expect(p.status).toBe('blocked');expect(p.blockReason).toBe('validation');expect(p.calls).toBe(calls);expect(work.revisions).toBeUndefined()});
+it('操作修正上限到了，FAIL 仍不得交付',async()=>{work.revisions=2;await runManager(final,s,models,root,root+'/out',()=>{},never,async(_t,html)=>({...evidence(html),status:'fail',scenarios:[{name:'累加',passed:false,steps:1,error:'錯誤結果'}]}));expect(p.status).toBe('blocked');expect(p.message).toContain('上限');expect(work.files).toEqual([]);expect(p.browserHistory).toHaveLength(1)});
+it('冒充 PASS 卻沒跑所有情境，一樣退回修正',async()=>{await runManager(final,s,models,root,root+'/out',()=>{},never,async(_t,html)=>({...evidence(html),scenarios:[]}));expect(work.state).toBe('queued');expect(work.files).toEqual([])});

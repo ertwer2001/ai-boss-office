@@ -1,0 +1,7 @@
+import fs from 'node:fs';import assert from 'node:assert/strict';
+const before=JSON.parse(fs.readFileSync('docs/verification/production-before-pro-update.json','utf8'));
+const health=await(await fetch('http://127.0.0.1:4317/api/health')).json(),state=await(await fetch('http://127.0.0.1:4317/api/state')).json();
+assert.equal(health.version,'2.2.0');assert(state.paused);assert.deepEqual(state.tasks,before.tasks);assert.deepEqual(state.projects,before.projects);assert.equal(state.boss,before.boss);
+const companies=(list:any[])=>list.map(({dispatchStatus,...co})=>({...co,autoDispatch:co.autoDispatch?{...co.autoDispatch,enabled:false}:undefined}));assert.deepEqual(companies(state.companies),companies(before.companies));
+const html=await(await fetch('http://127.0.0.1:4317/')).text();const asset=html.match(/src="(\/assets\/index-[^"]+\.js)"/)?.[1];assert(asset);assert((await fetch('http://127.0.0.1:4317'+asset)).ok);
+const result={at:new Date().toISOString(),health,allOriginalTasksPreserved:state.tasks.length,allOriginalProjectsPreserved:state.projects.length,allCompaniesPreserved:state.companies.length,paused:state.paused,working:state.tasks.filter((t:any)=>t.state==='working').length,projectCalls:state.projects.map((p:any)=>({id:p.id,calls:p.calls})),asset,http:true,noAdditionalEmployeeInference:true};fs.writeFileSync('docs/verification/production-pro-update.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));

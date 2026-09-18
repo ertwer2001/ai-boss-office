@@ -1,0 +1,17 @@
+import {describe,it,expect} from 'vitest';
+import {makeCompany,type Model,type Store,type CompanyType} from '../src/domain/company';
+import {autoEligibility,defaultAuto,recommendPlan,suggestedTask,suggestions,type AutoTask} from '../src/domain/recommendations';
+import {enqueue,enqueueAutomatic} from './dispatch';
+const models:Model[]=['gpt-6-astra','gpt-5.6-sol','gpt-5.6-terra','gpt-5.6-luna'].map(id=>({id,name:id,efforts:['low','medium','high'],defaultEffort:'medium'}));
+function fixture(type:CompanyType='studio'){const co=makeCompany('test',type,models),store:Store={version:1,boss:'測試老闆',companies:[co],tasks:[],paused:false,maxTasksPerDay:30};return {co,store}}
+function authorize(co:ReturnType<typeof fixture>['co']){co.autoDispatch={...defaultAuto(),enabled:true,authorizedAt:new Date().toISOString(),authorizedBy:'測試老闆',managerId:co.employees[0].id,instruction:'請主管安排內部工作'}}
+describe('公司建議與主管授權',()=>{
+ it.each(['studio','advisory','marketing','ecommerce','agency'] as CompanyType[])('%s 使用該公司職位與模型',type=>{const {co}=fixture(type);for(const s of suggestions[type]){const p=recommendPlan(co,s.title,models,undefined,s.id)[0];expect(co.employees.find(e=>e.id===p.employeeId)?.title).toBe(s.role);expect(p.model).toBe(s.model);expect(p.effort).toBe(s.effort)}});
+ it('無目標但沒下令不自動派工',()=>{const {co,store}=fixture();expect(autoEligibility(co,store).ready).toBe(false);expect(enqueueAutomatic(store,models)).toBeUndefined();co.autoDispatch={...defaultAuto(),enabled:true};expect(enqueueAutomatic(store,models)).toBeUndefined()});
+ it('手動指定員工沿用自訂設定',()=>{const {co}=fixture();co.employees[0].model='gpt-5.6-luna';co.employees[0].effort='low';expect(recommendPlan(co,'規畫工作',models,co.employees[0].id)[0]).toMatchObject({model:'gpt-5.6-luna',effort:'low'})});
+ it('缺少建議模型時回退至可用模型並驗證強度',()=>{const {co}=fixture();const limited=[{...models[1],efforts:['low'],defaultEffort:'low'}];expect(suggestedTask(co,suggestions.studio[0],limited)).toMatchObject({model:'gpt-5.6-sol',effort:'low'})});
+ it('主管授權後安排一件、有節流且不重複',()=>{const {co,store}=fixture();authorize(co);const now=Date.now(),first=enqueueAutomatic(store,models,now) as AutoTask;expect(first.origin).toBe('automatic');expect(enqueueAutomatic(store,models,now)).toBeUndefined();first.state='done';expect(enqueueAutomatic(store,models,now+1000)).toBeUndefined();const second=enqueueAutomatic(store,models,now+31*60000) as AutoTask;expect(second.suggestionId).not.toBe(first.suggestionId)});
+ it.each(['global','company','goal','blocked','approve','limit'])('%s 情況不自動派工',condition=>{const {co,store}=fixture();authorize(co);if(condition==='global')store.paused=true;if(condition==='company')co.paused=true;if(condition==='goal')co.goals.push({id:'g',name:'goal',target:1,baseline:0});if(condition==='limit')store.maxTasksPerDay=0;if(['blocked','approve'].includes(condition)){const t=enqueueAutomatic(store,models)!;t.state=condition as 'blocked'|'approve'}expect(enqueueAutomatic(store,models)).toBeUndefined()});
+ it('伺服器驗證本次模型，拒絕不支援強度',()=>{const {co,store}=fixture();expect(()=>enqueue(store,co,'x',[{employeeId:co.employees[0].id,title:'x',model:models[0].id,effort:'bogus'}],models)).toThrow();expect(store.tasks).toHaveLength(0)});
+ it('明確選擇的本次模型進入真實任務快照',()=>{const {co,store}=fixture();const p={employeeId:co.employees[0].id,title:'x',model:models[3].id,effort:'low'};expect(enqueue(store,co,'x',[p],models)[0]).toMatchObject(p);expect(co.employees[0].model).toBe('gpt-6-astra')});
+});

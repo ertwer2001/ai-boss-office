@@ -1,0 +1,10 @@
+import fs from 'node:fs';import assert from 'node:assert/strict';
+const url='http://127.0.0.1:4317';
+const [health,state,html,catalog]=await Promise.all([fetch(url+'/api/health').then(r=>r.json()),fetch(url+'/api/state').then(r=>r.json()),fetch(url).then(r=>r.text()),fetch(url+'/api/role-profiles').then(r=>r.json())]);
+const before=JSON.parse(fs.readFileSync('docs/verification/production-before-browser-evidence.json','utf8').replace(/^\uFEFF/,''));
+assert.equal(health.version,'2.5.0');assert.equal(state.paused,true);assert(!state.tasks.some((t:any)=>t.state==='working'));assert.equal(catalog.profiles.length,6);
+const strip=(x:any)=>{const {dispatchStatus,...rest}=x;return rest};assert.deepEqual(state.tasks,before.tasks);assert.deepEqual(state.projects,before.projects);assert.deepEqual(state.companies.map(strip),before.companies.map(strip));
+const assets=[...html.matchAll(/(?:src|href)="(\/assets\/[^\"]+)"/g)].map(x=>x[1]);assert(assets.some(x=>x.endsWith('.js')));for(const a of assets){const r=await fetch(url+a);assert(r.ok,a);assert((await r.text()).length>100)}
+const acceptance=JSON.parse(fs.readFileSync('docs/verification/browser-acceptance-result.json','utf8'));assert.equal(acceptance.noModelInference,true);assert.equal(acceptance.savedBrowserProof.screenshots,4);assert.equal(acceptance.savedBrowserProof.failureTraces,2);assert.equal(acceptance.savedBrowserProof.stepByStep,true);
+const unit=JSON.parse(fs.readFileSync('docs/verification/browser-evidence-unit-tests.json','utf8'));assert.equal(unit.numFailedTests,0);assert.equal(unit.numPassedTests,103);
+const result={at:new Date().toISOString(),health,companies:state.companies.length,tasks:state.tasks.length,projects:state.projects.length,allUserRecordsPreserved:true,paused:true,working:0,roles:catalog.profiles.length,assets,acceptance:{screenshots:4,failureTraces:2,stepByStep:true,noModelInference:true},unitTests:{passed:103,failed:0}};fs.writeFileSync('docs/verification/production-browser-evidence.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));

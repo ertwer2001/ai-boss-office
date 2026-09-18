@@ -1,0 +1,9 @@
+import type {Project} from '../domain/company';
+const actionName:Record<string,string>={click:'按下',fill:'輸入',select:'選擇',check:'勾選',uncheck:'取消勾選',text:'確認顯示',value:'確認欄位值',visible:'確認可見',hidden:'確認隱藏'};
+function stepText(step:{action:string;selector:string;expected?:string}){return `${actionName[step.action]||step.action} ${step.selector}${step.expected!==undefined?`「${step.expected}」`:''}`}
+export function BrowserEvidence({project:p}:{project:Project}){
+ const evidence=p.browserEvidence||p.browserHistory?.at(-1);
+ if(!evidence)return null;
+ const passed=evidence.scenarios.filter(s=>s.passed).length;
+ return <details className="browser-evidence"><summary>實際操作驗收：{evidence.status==='pass'?`通過 ${passed}／${evidence.scenarios.length}`:evidence.status==='fail'?`未通過 ${passed}／${evidence.scenarios.length}，已退回修正`:'驗收環境暫停'}</summary>{evidence.scenarios.map((s,i)=><section className={s.passed?'evidence-scenario pass':'evidence-scenario fail'} key={i}><strong>{s.passed?'✓':'✕'} {s.name}</strong><p>{s.passed?`操作 ${s.steps} 步，結果符合要求。`:`第 ${s.steps+1} 步未通過：${s.error?.split('\n')[0]||'結果不符合要求'}`}</p>{s.stepResults?.length?<details><summary>查看操作步驟</summary><ol>{s.stepResults.map((step,j)=><li key={j} className={step.passed?'':'step-fail'}>{step.passed?'✓':'✕'} {stepText(step)}{!step.passed&&<small>{step.detail.split('\n')[0]}</small>}</li>)}</ol></details>:null}<div className="evidence-links">{s.screenshotPath&&evidence.evidenceId&&<a className="btn small" target="_blank" rel="noreferrer" href={`/api/projects/${p.id}/browser-evidence/${evidence.evidenceId}/${i}/screenshot`}>查看驗收畫面</a>}{s.tracePath&&evidence.evidenceId&&<a className="btn small" href={`/api/projects/${p.id}/browser-evidence/${evidence.evidenceId}/${i}/trace`}>下載失敗追蹤（技術用）</a>}</div></section>)}<p className="exp">由本機隔離瀏覽器實際操作，沒有增加模型呼叫。只證明上列離線桌面情境；未列出的功能不視為已測。</p></details>;
+}

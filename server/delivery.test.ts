@@ -1,0 +1,10 @@
+import {it,expect} from 'vitest';import {validateDelivery,entryFile,findDelivered,previewPolicy,requirePublished} from './delivery';import {completeCount,type Store,type Project,type Task} from '../src/domain/company';
+const task={id:'task',companyId:'co',projectId:'project',attempt:2,files:['程式/co/task/v2/extra/index.html','程式/co/task/v2/index.html']} as Task;
+const delivery={summary:'計數器已做好',howToUse:['開啟成果，再按加一'],limitations:[],entryTaskId:'task',entryPath:'index.html'};
+const project:Project={id:'project',companyId:'co',mode:'goal',title:'成品',goal:'計數器',status:'completed',managerId:'manager',managerModel:'test',managerEffort:'low',createdAt:new Date().toISOString(),authorizedBy:'測試老闆',calls:4,maxCalls:18,maxRevisions:2,assumptions:[],message:'完成',delivery};const state={tasks:[task],projects:[project]} as Store;
+it('有檔案清單但專案未提交完成時，直接下載仍被攔截',()=>{expect(()=>requirePublished({...state,projects:[{...project,status:'blocked'}]},task)).toThrow('不能下載');expect(requirePublished(state,task)).toBe(task)});
+it('未提交的工作即使留有檔案清單，也不計入已交付件數',()=>{const work={...task,companyId:'co',state:'done',kind:'work'} as Task;expect(completeCount([work],'co',[{...project,status:'blocked'}])).toBe(0);expect(completeCount([work],'co',[project])).toBe(1)});
+it('要求開發 APP 時，不能用 Markdown 規格充當主要完成品',()=>{expect(()=>validateDelivery({...delivery,entryPath:'spec.md'},[task],()=>({'spec.md':'only plan'}),'開發一個 APP')).toThrow('不能用規格')});
+it('主要成果必須真的存在，且附白話說明與使用步驟',()=>{expect(()=>validateDelivery(delivery,[task],()=>({'index.html':'works'}))).not.toThrow();expect(()=>validateDelivery({...delivery,entryPath:'missing'},[task],()=>({'index.html':'works'}))).toThrow('不存在');expect(()=>validateDelivery({...delivery,howToUse:[]},[task],()=>({'index.html':'works'}))).toThrow('使用步驟')});
+it('同名巢狀檔案不會被誤當主要成果',()=>{expect(entryFile(state,project).index).toBe(1)});
+it('未完成整案不得開啟成品，預覽禁止連網與存取母頁',()=>{expect(()=>findDelivered({...state,projects:[{...project,status:'reviewing'}]},'project')).toThrow('尚未完成');expect(previewPolicy).toContain("connect-src 'none'");expect(previewPolicy).toContain('sandbox allow-scripts');expect(previewPolicy).not.toContain('allow-same-origin')});

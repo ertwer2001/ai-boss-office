@@ -1,0 +1,14 @@
+import {it,expect,afterEach} from 'vitest';
+import fs from 'node:fs';import path from 'node:path';
+import {runTask} from './runner';import {saveFile} from './workspace';
+import {makeCompany,type Task} from '../src/domain/company';
+const co=makeCompany('整合驗證','studio',[]),roots:string[]=[];
+function fixture(){fs.mkdirSync('docs/verification/runner-regressions',{recursive:true});const root=fs.mkdtempSync(path.resolve('docs/verification/runner-regressions/case-'));roots.push(root);return root}
+function task(id:string):Task{return {id,companyId:co.id,projectId:'project',kind:'work',employeeId:co.employees[1].id,title:'整合成果',command:'整合成果',dependsOn:[],state:'working',stage:'工作中',model:'test',effort:'low',createdAt:new Date().toISOString(),logs:[],files:[],sources:[],attempt:0,external:false}}
+function source(root:string,id:string,file:string,content:string){const t=task(id);t.attempt=1;t.state='done';t.reviewedAttempt=1;const rel=`workspaces/${id}/draft/v1/${file}`;t.pendingFiles=[{path:rel,sha256:saveFile(root,rel,content)}];return t}
+const output=JSON.stringify({summary:'完成',needsInput:'',files:[{path:'結果.md',content:'整合'}],checks:[]});
+it('執行中返工會作廢遲到結果，不覆寫新一輪狀態',async()=>{const root=fixture(),t=task('late');let resolve!:(v:string)=>void;const work=runTask(t,co.employees[1],[],root,path.join(root,'outputs'),()=>{},{execute:()=>new Promise(r=>{resolve=r})});t.executionRevision=1;t.state='queued';resolve(output);await work;expect(t.state).toBe('queued');expect(t.pendingFiles).toBeUndefined();expect(t.result).toBeUndefined()});
+it('主管已決定的假設與老闆方向會送進員工實際提示',async()=>{const root=fixture();let prompt='';await runTask(task('brief'),co.employees[1],[],root,path.join(root,'outputs'),()=>{},{projectBrief:{assumptions:['離線、單人、免登入'],decisions:[{text:'不要要求付費'}]},execute:async(_t,_r,p)=>{prompt=p;return output}});expect(prompt).toContain('離線、單人、免登入');expect(prompt).toContain('不要要求付費')});
+afterEach(()=>{for(const root of roots.splice(0)){const checked=path.resolve(root);if(!checked.startsWith(path.resolve('docs/verification/runner-regressions')+path.sep))throw new Error('測試清理路徑錯誤');fs.rmSync(checked,{recursive:true,force:true})}});
+it('不同員工同名但不同內容，整合前拒絕靜默覆蓋且不呼叫模型',async()=>{const root=fixture(),prior=[source(root,'a','main.js','exports.a=1'),source(root,'b','main.js','exports.b=2')];let calls=0;await expect(runTask(task('merge'),co.employees[1],prior,root,path.join(root,'outputs'),()=>{},{execute:async()=>{calls++;return output}})).rejects.toThrow('同名');expect(calls).toBe(0)});
+it('前置內容過長時停止交接，不將截斷 JSON 傳给模型',async()=>{const root=fixture(),prior=[source(root,'a','long.md','a'.repeat(121000))];let calls=0;await expect(runTask(task('merge'),co.employees[1],prior,root,path.join(root,'outputs'),()=>{},{execute:async()=>{calls++;return output}})).rejects.toThrow('完整');expect(calls).toBe(0)});
