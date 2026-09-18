@@ -1,4 +1,4 @@
-param([string]$Python)
+﻿param([string]$Python)
 $ErrorActionPreference = 'Stop'
 $ProjectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
 $OfficeRoot = (Resolve-Path -LiteralPath (Join-Path $ProjectRoot '..')).Path

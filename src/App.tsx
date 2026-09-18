@@ -29,7 +29,7 @@ export default function App(){
   if(['pdf','docx'].includes(ext)){
    if(file.size>10*1024*1024){setToast('PDF／DOCX 單檔上限是 10 MB');return}
    setParsingDocument(true);setDocumentAttachment(undefined);setToast('Docling 正在本機解析文件…');
-   try{const dataUrl=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error('瀏覽器無法讀取這份文件'));reader.readAsDataURL(file)});const base64=dataUrl.split(',',2)[1]||'';const result=await api<{document:DocumentAttachment}>(`/companies/${companyId}/documents/parse`,'POST',{name:file.name,base64});setDocumentAttachment(result.document);setToast(`已在本機解析 ${file.name}，共 ${result.document.characters.toLocaleString()} 字元`)}catch(e){setToast((e as Error).message)}finally{setParsingDocument(false)}
+   try{const dataUrl=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error('瀏覽器無法讀取這份文件'));reader.readAsDataURL(file)});const base64=dataUrl.split(',',2)[1]||'';const result=await api<{document:DocumentAttachment}>(`/companies/${companyId}/documents/parse`,'POST',{name:file.name,base64});setDocumentAttachment(result.document);const truncated=result.document.limitations.some(item=>item.includes('截斷'));setToast(`已在本機解析 ${file.name}，共 ${result.document.characters.toLocaleString()} 字元${truncated?'；內容超過上限，主管只會收到前 80,000 字元':''}`)}catch(e){setToast((e as Error).message)}finally{setParsingDocument(false)}
    return;
   }
   if(!['txt','md','csv','json'].includes(ext)){setToast('只接受 TXT、MD、CSV、JSON、PDF 或 DOCX');return}

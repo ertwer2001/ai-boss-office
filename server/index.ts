@@ -18,7 +18,7 @@ import {runTask,children,readTaskFiles} from './runner';
 import {terminateOwnedProcess} from './processControl';
 import {loadParsedDocument,parseDocumentFile,stopDocumentJobs} from './documentParsing';
 import {cancelQueuedAuto} from './dispatch';
-import {createProject,advanceProjects,runManager,stopProject,beforeProjectCall,autonomousStatus,startAutonomous,pauseProject,resumeProjectWork,handleTaskError} from './projects';
+import {createProject,advanceProjects,runManager,stopProject,beforeProjectCall,autonomousStatus,startAutonomous,pauseProject,resumeProjectWork,retargetUnavailableTask,handleTaskError} from './projects';
 import {autoEligibility,defaultAuto,hasActiveGoal,recommendPlan,suggestions,type AutoTask} from '../src/domain/recommendations';
 import {safePath,saveFile} from './workspace';
 import {makeCompany,plan,ready,completeCount,type Store,type Task,type CompanyType,type Model} from '../src/domain/company';
@@ -56,7 +56,8 @@ app.post('/api/presence/ack',async c=>{const b=leaseSchema.parse(await c.req.jso
 app.post('/api/presence/close',async c=>{const b=leaseSchema.parse(await c.req.json());await presence.close(b.id,b.token);return c.json({ok:true})});
 app.get('/api/presence/events',c=>{const b=leaseSchema.parse(c.req.query());presence.connect(b.id,b.token);return streamSSE(c,async stream=>{stream.onAbort(()=>presence.close(b.id,b.token));try{while(!stream.aborted&&presence.valid(b.id,b.token)){await stream.writeSSE({data:'heartbeat'});await stream.sleep(3000)}}finally{await presence.close(b.id,b.token)}})});
 app.get('/api/status',async c=>{try{return c.json(await control.status())}catch(e){return c.json({connected:false,models:[],error:(e as Error).message})}});
-app.get('/api/state',async c=>{if(!state.companies.length){const s=await control.status();state.companies.push(makeCompany('AI 營運公司','studio',s.models));save()}return c.json({...state,companies:state.companies.map(co=>({...co,dispatchStatus:autonomousStatus(co,state)})),generation,outputRoot,pageConnected:presence.available,pageCount:presence.count,presenceError:presence.lastError})});
+async function listedModels():Promise<Model[]>{if(process.env.BOSS_DISABLE_INFERENCE==='1')return [];try{return (await control.status()).models}catch{return []}}
+app.get('/api/state',async c=>{if(!state.companies.length){state.companies.push(makeCompany('AI 營運公司','studio',await listedModels()));save()}return c.json({...state,companies:state.companies.map(co=>({...co,dispatchStatus:autonomousStatus(co,state)})),generation,outputRoot,pageConnected:presence.available,pageCount:presence.count,presenceError:presence.lastError})});
 app.post('/api/companies/:id/documents/parse',async c=>{
  requirePage(c);const co=state.companies.find(x=>x.id===c.req.param('id'));if(!co)throw new Error('找不到公司');
  const pageId=c.req.header('x-boss-page')||'',pageToken=c.req.header('x-boss-page-token')||'';
@@ -95,14 +96,14 @@ app.post('/api/projects/:id/resume',async c=>{requirePage(c);
  p.maxCalls=b.maxCalls||p.maxCalls;(p.decisionLog??=[]).push({at:new Date().toISOString(),text:b.answer||'老闆要求在原授權範圍內繼續'});p.escalation=undefined;p.blockReason=undefined;
  const failed=tasks.find(t=>t.state==='blocked'&&t.kind!=='work');
  const unfinished=tasks.find(t=>t.kind==='work'&&['blocked','approve'].includes(t.state));
- if(failed){failed.state='queued';failed.error=undefined}
+ if(failed){retargetUnavailableTask(state,failed);failed.state='queued';failed.error=undefined}
  else if(unfinished){resumeProjectWork(state,p,unfinished,b.answer)}
  else if(!tasks.some(t=>t.kind==='work')){const planner=tasks.find(t=>t.kind==='plan');if(planner)planner.state='queued'}
  p.status=tasks.some(t=>t.kind==='work')?'running':'planning';p.message='老闆已手動要求主管繼續';save();return c.json({ok:true});
 });
-app.post('/api/companies',async c=>{const b=z.object({name:z.string().trim().min(1).max(60),type:z.enum(['studio','advisory','marketing','ecommerce','agency'])}).parse(await c.req.json());const s=await control.status();const co=makeCompany(b.name,b.type,s.models);state.companies.push(co);save();return c.json(co)});
+app.post('/api/companies',async c=>{const b=z.object({name:z.string().trim().min(1).max(60),type:z.enum(['studio','advisory','marketing','ecommerce','agency'])}).parse(await c.req.json());const co=makeCompany(b.name,b.type,await listedModels());state.companies.push(co);save();return c.json(co)});
 app.patch('/api/companies/:id',async c=>{const b=z.object({name:z.string().trim().min(1).max(60)}).parse(await c.req.json());const co=state.companies.find(x=>x.id===c.req.param('id'));if(!co)throw new Error('找不到公司');co.name=b.name;save();return c.json({ok:true})});
-app.patch('/api/employees/:id',async c=>{const b=z.object({name:z.string().trim().min(1).max(40),model:z.string(),effort:z.string(),brief:z.string().max(4000),profileId:z.enum(profileIds).optional()}).parse(await c.req.json());const e=state.companies.flatMap(c=>c.employees).find(e=>e.id===c.req.param('id'));if(!e)throw new Error('找不到員工');const s=await control.status();if(!s.models.some(m=>m.id===b.model&&m.efforts.includes(b.effort)))throw new Error('此模型不支援所選的推理強度');Object.assign(e,b);save();return c.json({ok:true})});
+app.patch('/api/employees/:id',async c=>{const b=z.object({name:z.string().trim().min(1).max(40),model:z.string(),effort:z.string(),brief:z.string().max(4000),profileId:z.enum(profileIds).optional()}).parse(await c.req.json());const e=state.companies.flatMap(c=>c.employees).find(e=>e.id===c.req.param('id'));if(!e)throw new Error('找不到員工');const s=await control.status();if(!s.models.some(m=>m.id===b.model&&m.efforts.includes(b.effort)))throw new Error('此模型不支援所選的推理強度');Object.assign(e,b);const retargeted=state.tasks.filter(t=>t.employeeId===e.id&&t.state==='blocked').filter(t=>retargetUnavailableTask(state,t)).length;save();return c.json({ok:true,retargeted})});
 app.post('/api/goals',async c=>{const b=z.object({companyId:z.string(),name:z.string().trim().min(1).max(80),target:z.number().int().positive().max(10000)}).parse(await c.req.json());const co=state.companies.find(x=>x.id===b.companyId);if(!co)throw new Error('找不到公司');co.goals.push({id:crypto.randomUUID(),name:b.name,target:b.target,baseline:completeCount(state.tasks,co.id,state.projects||[])});cancelQueuedAuto(co,state.tasks,'已有公司目標，停止無目標自動工作');save();return c.json({ok:true})});
 app.post('/api/plan',async c=>{const b=z.object({companyId:z.string(),text:z.string().trim().min(1).max(12000),employeeId:z.string().optional(),suggestionId:z.string().optional()}).parse(await c.req.json());const co=state.companies.find(x=>x.id===b.companyId);if(!co)throw new Error('找不到公司');const s=await control.status();return c.json({tasks:recommendPlan(co,b.text,s.models,b.employeeId,b.suggestionId)})});
 app.post('/api/dispatch',async c=>{

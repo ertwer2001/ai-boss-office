@@ -111,9 +111,10 @@ Docling 只負責本機文件解析，本身不會消耗 Codex 模型強度；�
 ```powershell
 npm test
 npm run build
+npm run verify
 ```
 
-預設測試不呼叫模型。名稱包含 `live` 的驗證腳本可能會使用 Codex 額度，因此不在 CI 或預設測試內。GitHub Actions 會在 Windows 與 Node.js 24 上執行單元測試及正式建置。
+`npm run verify` 會用隔離資料啟動本機服務，確認即使尚未安裝或登入 Codex 也能開啟辦公室；不呼叫模型。名稱包含 `live` 的驗證腳本可能會使用 Codex 額度，因此不在 CI 或預設測試內。GitHub Actions 會在 Windows 與 Node.js 24 上執行單元測試、正式建置與零模型 HTTP 驗證。
 
 架構與資料流見 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。第三方來源及授權見 [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md)。
 

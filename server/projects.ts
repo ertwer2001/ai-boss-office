@@ -184,7 +184,19 @@ function rework(s:Store,p:Project,t:Task,direction:string){
 }
 
 export function resumeProjectWork(s:Store,p:Project,t:Task,answer:string){
- t.revisions=0;t.consultations=0;rework(s,p,t,`${t.feedback||''}\n老闆補充方向：${answer||'依先前審查意見繼續修正'}`);
+ retargetUnavailableTask(s,t);t.revisions=0;t.consultations=0;rework(s,p,t,`${t.feedback||''}\n老闆補充方向：${answer||'依先前審查意見繼續修正'}`);
+}
+/** A user may replace a retired model in employee settings before resuming a blocked task. */
+export function retargetUnavailableTask(s:Store,t:Task){
+ if(!/模型已不可用/.test(t.error||''))return false;
+ const employee=s.companies.find(c=>c.id===t.companyId)?.employees.find(e=>e.id===t.employeeId);
+ if(!employee?.model||!employee.effort)throw new Error('請先為這位員工設定可用模型與強度');
+ const changed=t.model!==employee.model||t.effort!==employee.effort;
+ if(!changed)return false;
+ const previous=`${t.model} · ${t.effort}`;t.model=employee.model;t.effort=employee.effort;
+ const project=s.projects?.find(p=>p.id===t.projectId);if(project?.managerId===t.employeeId){project.managerModel=employee.model;project.managerEffort=employee.effort}
+ t.logs.push({at:at(),text:`已套用目前員工模型：${previous} → ${t.model} · ${t.effort}；需由老闆手動繼續。`});
+ return true;
 }
 export function handleTaskError(s:Store,t:Task,error:Error){
  if(t.state==='cancelled'||s.projects?.some(p=>p.id===t.projectId&&['stopped','completed'].includes(p.status)))return;
