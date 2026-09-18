@@ -5,7 +5,7 @@ import path from 'node:path';
 
 const port=Number(process.env.BOSS_PORT||4327),base=`http://127.0.0.1:${port}`;
 const dataRoot=path.resolve(process.env.BOSS_DATA_DIR||'docs/verification/docling-tests/http-data');
-const fixture=path.resolve('docs/verification/docling-tests/fixtures/phase2-sample.docx');
+const fixture=path.resolve('test/fixtures/documents/phase2-sample.docx');
 const jsonHeaders={'Content-Type':'application/json','X-Boss-Office':'local'};
 const health=await (await fetch(base+'/api/health')).json() as any;
 assert.equal(health.version,'2.6.0');assert.match(health.documentParsing,/local-only/);

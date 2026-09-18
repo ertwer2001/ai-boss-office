@@ -30,7 +30,7 @@ def make_pdf(path: Path) -> None:
 
 
 def main() -> None:
-    target = Path(sys.argv[1] if len(sys.argv) > 1 else "docs/verification/docling-tests/fixtures")
+    target = Path(sys.argv[1] if len(sys.argv) > 1 else "test/fixtures/documents")
     target.mkdir(parents=True, exist_ok=True)
     document = Document()
     document.add_heading("老闆辦公室文件解析測試", 0)

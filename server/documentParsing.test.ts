@@ -5,7 +5,9 @@ import {decodeDocument,documentJobs,loadParsedDocument,MAX_DOCUMENT_BYTES,parseD
 
 const projectRoot=path.resolve('.');
 const casesRoot=path.resolve('docs/verification/docling-tests/cases');
-const fixtures=path.resolve('docs/verification/docling-tests/fixtures');
+const fixtures=path.resolve('test/fixtures/documents');
+const hasDocling=process.env.BOSS_SKIP_DOCLING_INTEGRATION!=='1'&&fs.existsSync(path.resolve('..','runtime','docling','venv','Scripts','python.exe'));
+const doclingIt=hasDocling?it:it.skip;
 beforeAll(()=>fs.mkdirSync(casesRoot,{recursive:true}));
 const b64=(file:string)=>fs.readFileSync(path.join(fixtures,file)).toString('base64');
 const dataRoot=(label:string)=>fs.mkdtempSync(path.join(casesRoot,label+'-'));
@@ -19,7 +21,7 @@ describe('本機文件解析',()=>{
   expect(()=>decodeDocument('large.pdf',Buffer.alloc(MAX_DOCUMENT_BYTES+1).toString('base64'))).toThrow('10 MB');
  });
 
- it('以離線 Docling 實際解析繁體中文 DOCX，並驗證來源雜湊',async()=>{
+ doclingIt('以離線 Docling 實際解析繁體中文 DOCX，並驗證來源雜湊',async()=>{
   const root=dataRoot('docx');
   const attachment=await parseDocumentFile({dataRoot:root,projectRoot,companyId:'company-a',name:'phase2-sample.docx',base64:b64('phase2-sample.docx'),isCurrent:()=>true});
   const loaded=loadParsedDocument(root,attachment.id,'company-a');
@@ -30,7 +32,7 @@ describe('本機文件解析',()=>{
   expect(()=>loadParsedDocument(root,attachment.id,'company-a')).toThrow('校驗不符');
  },120000);
 
- it('以預先下載的本機模型實際解析數位 PDF',async()=>{
+ doclingIt('以預先下載的本機模型實際解析數位 PDF',async()=>{
   const root=dataRoot('pdf');
   const attachment=await parseDocumentFile({dataRoot:root,projectRoot,companyId:'company-a',name:'phase2-sample.pdf',base64:b64('phase2-sample.pdf'),isCurrent:()=>true});
   const loaded=loadParsedDocument(root,attachment.id,'company-a');
