@@ -1,5 +1,6 @@
 """Run pinned TradingAgents as a cancellable research subprocess, never an order executor."""
 import json
+import math
 import os
 import sys
 from datetime import datetime, timezone
@@ -22,6 +23,7 @@ def main():
     from budget import Budget
     from tradingagents.default_config import DEFAULT_CONFIG
     from tradingagents.graph.trading_graph import TradingAgentsGraph
+    from tradingagents.dataflows.stockstats_utils import load_ohlcv
     import yfinance as yf
     yf.set_tz_cache_location(str(root / "cache" / "yfinance"))
 
@@ -38,10 +40,21 @@ def main():
         cfg["openai_reasoning_effort"] = config["effort"]
     graph = TradingAgentsGraph(selected_analysts=["market", "fundamentals", "news"], config=cfg, callbacks=[budget])
     state, signal = graph.propagate(query["ticker"], query["date"])
+    market = load_ohlcv(query["ticker"], query["date"], fill_gaps=False).tail(240)
+    bars = []
+    for _, row in market.iterrows():
+        values = [row.get(field) for field in ("Open", "High", "Low", "Close", "Volume")]
+        if any(value is None or not math.isfinite(float(value)) for value in values):
+            continue
+        bars.append({"time": row["Date"].strftime("%Y-%m-%d"), "open": float(row["Open"]), "high": float(row["High"]), "low": float(row["Low"]), "close": float(row["Close"]), "volume": float(row["Volume"])})
+    if len(bars) < 2:
+        raise RuntimeError("Verified OHLCV has fewer than two complete rows; chart not produced")
+    chart = {"vendor": "yfinance via TradingAgents", "requestedDate": query["date"], "latestTradingDate": bars[-1]["time"], "bars": bars}
     fields = ["market_report", "fundamentals_report", "news_report", "investment_plan", "trader_investment_plan", "final_trade_decision"]
     result = {"engine": "TradingAgents", "commit": COMMIT, "researchOnly": True,
               "ticker": query["ticker"], "analysisDate": query["date"],
               "retrievedAt": datetime.now(timezone.utc).isoformat(), "modelCalls": budget.calls, "modelConfig": config,
+              "chart": chart,
               "signal": signal, "reports": {key: state.get(key, "") for key in fields},
               "toolEvidence": budget.tools,
               "limitations": ["研究模型的判斷不是已驗證報酬或交易指令。", "資料供應商回應的日期與完整性仍須逐項審查；分析日期不是所有來源均已更新的證明。", "歷史日期的新聞與財報可能缺少當時快照，不可據此宣稱無前視偏誤回測。"]}

@@ -108,7 +108,7 @@ Docling 只負責本機文件解析，本身不會消耗 Codex 模型強度；�
 
 ## 開發與驗證
 
-投顧研究公司可選裝 [TradingAgents 研究引擎](tools/tradingagents/README.md)。研究使用獨立 API／本機模型；Codex 員工負責整理與主管 Review。設定完成前研究入口保持停用，關頁與各級停止沿用辦公室控制。上游固定來源及 Apache-2.0 授權位於 `tools/tradingagents/`。
+投顧研究公司可選裝 [TradingAgents 研究引擎](tools/tradingagents/README.md)。研究使用獨立 API／本機模型；Codex 員工負責整理與主管 Review。整案 PASS 後，成果頁會直接顯示上游實際回傳的 K 線、成交量、資料截止日、來源和限制；原始 `tradingagents-evidence.json` 仍可下載並以 SHA-256 校驗。圖表由 [TradingView Lightweight Charts™](https://tradingview.github.io/lightweight-charts/) 呈現，不提供行情資料。設定完成前研究入口保持停用，關頁與各級停止沿用辦公室控制。上游固定來源及 Apache-2.0 授權位於 `tools/tradingagents/`。
 
 ```powershell
 npm test

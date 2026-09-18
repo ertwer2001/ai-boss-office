@@ -6,6 +6,13 @@
 - 固定來源 commit：`2d17df8da1536c121e4d7395ac5a5dcec9e96d6f`
 - Apache-2.0 授權原文：[LICENSE](../tools/tradingagents/LICENSE)
 - 上游原始碼不修改，透過獨立 Python bridge 呼叫。安裝於專案上一層 `runtime/tradingagents`；實際相依清單保存在 `installed-packages.txt`。
+
+## TradingView Lightweight Charts 5.2.1
+
+- 專案：https://github.com/tradingview/lightweight-charts
+- 授權：Apache-2.0
+- 用途：在已通過主管整案 Review 的 TradingAgents 成果頁呈現上游實際回傳的 K 線與成交量。
+- 圖表函式庫不提供市場資料。依授權要求，介面保留 TradingView Lightweight Charts™ 可見歸屬與連結。
 - 本 App 的 bridge、呼叫預算、停止控制和 Review 接線是本專案新增實作。研究來源與 LLM API 依各供應商條款，不因開源授權而免除模型費用。
 
 ## Docling 2.127.0

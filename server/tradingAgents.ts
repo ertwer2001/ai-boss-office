@@ -8,6 +8,7 @@ import type {Task} from '../src/domain/company';
 import {children} from './runner';
 import {terminateOwnedProcess} from './processControl';
 import {digest} from './workspace';
+import {parseTradingEvidence} from '../src/domain/tradingChart';
 
 export const tradingCommit='2d17df8da1536c121e4d7395ac5a5dcec9e96d6f';
 const base=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -49,6 +50,7 @@ export async function runTradingResearch(task:Task,dataRoot:string,changed:()=>v
  if(raw.length>100000)throw new Error('研究原始資料超過交接上限，未截斷');
  const result=JSON.parse(raw);
  if(result.commit!==tradingCommit||result.ticker!==research.ticker||result.analysisDate!==research.date||result.researchOnly!==true||!Array.isArray(result.toolEvidence))throw new Error('研究輸出校驗失敗');
+ try{parseTradingEvidence(raw)}catch{throw new Error('研究圖表與原始 OHLCV 證據校驗失敗')}
  task.researchReceipt={sha256:digest(raw)};
  task.sources.push({kind:'tool',ref:`TradingAgents ${tradingCommit} / ${research.ticker} / ${research.date}（模型研究，非已驗證事實）`,sha256:digest(raw),at:new Date().toISOString()});changed();
  return raw;

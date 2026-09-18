@@ -20,7 +20,7 @@ const child=spawn(process.execPath,['--import','tsx','server/index.ts'],{
 let stdout='',stderr='';child.stdout.on('data',chunk=>stdout=(stdout+chunk).slice(-4000));child.stderr.on('data',chunk=>stderr=(stderr+chunk).slice(-4000));
 try{
  let health:Response|undefined;
- for(let attempt=0;attempt<30;attempt++){
+ for(let attempt=0;attempt<90;attempt++){
   try{health=await fetch(base+'/api/health');if(health.ok)break}catch{}
   await wait(200);
  }

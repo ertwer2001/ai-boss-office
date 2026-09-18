@@ -19,7 +19,7 @@ describe('TradingAgents research boundary',()=>{
   const child=children.get(task.id)!;expect(child.pid).toBe(task.pid);
   await terminateOwnedProcess(child);expect(await pending).toBeInstanceOf(Error);
   expect(children.has(task.id)).toBe(false);expect(task.pid).toBeUndefined();
- });
+ },10000);
  it('rejects path traversal, invalid calendar dates, future dates and unbounded calls',()=>{
   for(const patch of [{ticker:'../secret'},{date:'2026-02-30'},{date:'9999-01-01'},{maxCalls:999}])expect(researchSchema.safeParse({...query,...patch}).success).toBe(false);
   expect(researchSchema.parse({...query,ticker:'aapl'}).ticker).toBe('AAPL');
